@@ -1,80 +1,161 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <title>Singleton Pattern Demo</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    .log-box { border: 1px solid #ccc; padding: 10px; margin-top: 10px; height: 150px; overflow-y: auto; }
-    button { margin: 5px; padding: 10px; cursor: pointer; }
-  </style>
+    <meta charset="utf-8" />
+    <title>Banking App Patterns Demo</title>
 </head>
+
 <body>
-  <h2>Singleton Pattern Demo</h2>
-  <p><b>Singleton ensures only one instance exists.</b></p>
-  
-  <button onclick="createLogger()">Create Logger Instance</button>
-  <button onclick="logMessage()">Add Log Message</button>
+    <h2>Banking App — Observer, Strategy & Command</h2>
+    <div id="accounts"></div>
+    <button onclick="seed()">Seed Accounts</button>
+    <button onclick="deposit()">Deposit</button>
+    <button onclick="withdraw()">Withdraw</button>
+    <button onclick="undo()">Undo</button>
+    <button onclick="interest()">Apply Interest</button>
+    <h3>Notifications</h3>
+    <div id="notes"></div>
 
-  <div class="log-box" id="output"></div>
-
-  <script>
-    // Singleton Logger Class
-    const Logger = (function () {
-      let instance; // private variable to store single instance
-
-      function createInstance() {
-        const logs = [];
-        return {
-          addLog: function (msg) {
-            logs.push(msg);
-            displayLogs(logs);
-          },
-          getLogs: function () {
-            return logs;
-          }
-        };
-      }
-
-      return {
-        getInstance: function () {
-          if (!instance) {
-            instance = createInstance();
-            displayOutput("✅ New Logger instance created");
-          } else {
-            displayOutput("⚠️ Using existing Logger instance");
-          }
-          return instance;
+    <script>
+        class NotificationCenter {
+            constructor() {
+                this.obs = []
+            }
+            subscribe(f) {
+                this.obs.push(f)
+            }
+            notify(e) {
+                this.obs.forEach(fn => fn(e))
+            }
         }
-      };
-    })();
+        const notifier = new NotificationCenter();
 
-    // --- Demo functions ---
-    let logger;
+        class Interest {
+            calc(b) {
+                return 0
+            }
+        };
+        class Savings extends Interest {
+            calc(b) {
+                return b * 0.03
+            }
+        };
+        class Fixed extends Interest {
+            calc(b) {
+                return b * 0.06
+            }
+        };
+        class Current extends Interest {}
 
-    function createLogger() {
-      logger = Logger.getInstance();
-    }
+        class Account {
+            constructor(id, owner, t, b, s) {
+                this.id = id;
+                this.owner = owner;
+                this.type = t;
+                this.bal = b;
+                this.strat = s
+            }
+            deposit(a) {
+                this.bal += a;
+                notifier.notify(`${this.owner} deposit ₹${a}`)
+            }
+            withdraw(a) {
+                if (a > this.bal) throw "No funds";
+                this.bal -= a;
+                notifier.notify(`${this.owner} withdraw ₹${a}`)
+            }
+            interest() {
+                const i = this.strat.calc(this.bal);
+                this.bal += i;
+                notifier.notify(`${this.owner} interest ₹${i.toFixed(2)}`)
+            }
+        }
 
-    function logMessage() {
-      if (!logger) {
-        displayOutput("❌ Please create a Logger instance first!");
-        return;
-      }
-      const msg = "Log entry at " + new Date().toLocaleTimeString();
-      logger.addLog(msg);
-    }
+        class Cmd {
+            execute() {}
+            undo() {}
+        };
+        class DepCmd extends Cmd {
+            constructor(ac, a) {
+                super();
+                this.ac = ac;
+                this.a = a
+            }
+            execute() {
+                this.ac.deposit(this.a)
+            }
+            undo() {
+                this.ac.withdraw(this.a)
+            }
+        };
+        class WdCmd extends Cmd {
+            constructor(ac, a) {
+                super();
+                this.ac = ac;
+                this.a = a
+            }
+            execute() {
+                this.ac.withdraw(this.a)
+            }
+            undo() {
+                this.ac.deposit(this.a)
+            }
+        }
 
-    function displayLogs(logs) {
-      const out = document.getElementById("output");
-      out.innerHTML = "<b>Logger Entries:</b><br>" + logs.join("<br>");
-    }
+        class CmdMgr {
+            constructor() {
+                this.h = []
+            }
+            exec(c) {
+                c.execute();
+                this.h.push(c)
+            }
+            undo() {
+                const c = this.h.pop();
+                c && c.undo()
+            }
+        }
+        const mgr = new CmdMgr();
 
-    function displayOutput(msg) {
-      const out = document.getElementById("output");
-      out.innerHTML += msg + "<br>";
-    }
-  </script>
+        const accts = [];
+        let id = 1;
+
+        function seed() {
+            accts.push(new Account(id++, "Alice", "savings", 1000, new Savings()), new Account(id++, "Bob", "fixed", 5000, new Fixed()));
+            render()
+        }
+
+        function render() {
+            document.getElementById('accounts').innerHTML = accts.map(a => `${a.owner} (${a.type}): ₹${a.bal.toFixed(2)}`).join('<br>')
+        }
+
+        function deposit() {
+            mgr.exec(new DepCmd(accts[0], 200));
+            render()
+        }
+
+        function withdraw() {
+            mgr.exec(new WdCmd(accts[0], 100));
+            render()
+        }
+
+        function undo() {
+            mgr.undo();
+            render()
+        }
+
+        function interest() {
+            accts.forEach(a => a.interest());
+            render()
+        }
+
+        notifier.subscribe(msg => {
+            const n = document.createElement('div');
+            n.textContent = msg;
+            document.getElementById('notes').prepend(n)
+        })
+    </script>
 </body>
-</html>
 
+</html>

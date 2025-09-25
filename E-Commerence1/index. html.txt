@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Banking App Patterns Demo</title>
+</head>
+<body>
+  <h2>Banking App — Observer, Strategy & Command</h2>
+  <div id="accounts"></div>
+  <button onclick="seed()">Seed Accounts</button>
+  <button onclick="deposit()">Deposit</button>
+  <button onclick="withdraw()">Withdraw</button>
+  <button onclick="undo()">Undo</button>
+  <button onclick="interest()">Apply Interest</button>
+  <h3>Notifications</h3>
+  <div id="notes"></div>
+
+  <script>
+    class NotificationCenter{constructor(){this.obs=[]}subscribe(f){this.obs.push(f)}notify(e){this.obs.forEach(fn=>fn(e))}}
+    const notifier=new NotificationCenter();
+
+    class Interest{calc(b){return 0}};class Savings extends Interest{calc(b){return b*0.03}};class Fixed extends Interest{calc(b){return b*0.06}};class Current extends Interest{}
+
+    class Account{constructor(id,owner,t,b,s){this.id=id;this.owner=owner;this.type=t;this.bal=b;this.strat=s}deposit(a){this.bal+=a;notifier.notify(`${this.owner} deposit ₹${a}`)}withdraw(a){if(a>this.bal)throw"No funds";this.bal-=a;notifier.notify(`${this.owner} withdraw ₹${a}`)}interest(){const i=this.strat.calc(this.bal);this.bal+=i;notifier.notify(`${this.owner} interest ₹${i.toFixed(2)}`)}}
+
+    class Cmd{execute(){}undo(){}};class DepCmd extends Cmd{constructor(ac,a){super();this.ac=ac;this.a=a}execute(){this.ac.deposit(this.a)}undo(){this.ac.withdraw(this.a)}};class WdCmd extends Cmd{constructor(ac,a){super();this.ac=ac;this.a=a}execute(){this.ac.withdraw(this.a)}undo(){this.ac.deposit(this.a)}}
+
+    class CmdMgr{constructor(){this.h=[]}exec(c){c.execute();this.h.push(c)}undo(){const c=this.h.pop();c&&c.undo()}}
+    const mgr=new CmdMgr();
+
+    const accts=[];let id=1;
+    function seed(){accts.push(new Account(id++,"Alice","savings",1000,new Savings()),new Account(id++,"Bob","fixed",5000,new Fixed()));render()}
+    function render(){document.getElementById('accounts').innerHTML=accts.map(a=>`${a.owner} (${a.type}): ₹${a.bal.toFixed(2)}`).join('<br>')}
+    function deposit(){mgr.exec(new DepCmd(accts[0],200));render()}
+    function withdraw(){mgr.exec(new WdCmd(accts[0],100));render()}
+    function undo(){mgr.undo();render()}
+    function interest(){accts.forEach(a=>a.interest());render()}
+
+    notifier.subscribe(msg=>{const n=document.createElement('div');n.textContent=msg;document.getElementById('notes').prepend(n)})
+  </script>
+</body>
+</html>
